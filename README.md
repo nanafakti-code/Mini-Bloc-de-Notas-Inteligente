@@ -126,19 +126,24 @@ GROQ_API_KEY=tu_api_key_aqui_sin_comillas
 ```
 lib/
 ├── 📄 main.dart                          # Punto de entrada + configuración
-├── 🎨 app/
+├── 🎨 app.dart                           # Configuración de la app (temas, rutas)
+│
+├── ⚙️ app/
 │   └── app.dart                          # Configuración de la app (temas, rutas)
 │
-├── ⚙️ core/
-│   ├── 🗄️ database/
+├── 🗄️ core/
+│   ├── 📊 database/
 │   │   ├── app_database.dart             # Inicialización de SQLite
 │   │   └── note_dao.dart                 # Data Access Object para notas
 │   │
-│   ├── 📊 models/
+│   ├── 📋 models/
 │   │   └── note.dart                     # Modelo de datos (Note entity)
 │   │
 │   └── 🤖 services/
 │       └── ai_service.dart               # Servicio de IA (Groq API)
+│
+├── 🎯 utils/
+│   └── helpers.dart                      # Funciones auxiliares
 │
 └── 📋 features/
     └── notes/
@@ -154,6 +159,21 @@ lib/
                 ├── note_form.dart        # Formulario reutilizable
                 └── note_item.dart        # Card de nota individual
 ```
+
+### 📊 Descripción de Carpetas
+
+| Carpeta | Propósito |
+|---------|-----------|
+| **lib/** | Código fuente principal |
+| **app/** | Configuración global de la aplicación (tema, rutas) |
+| **core/** | Lógica compartida (BD, modelos, servicios) |
+| **core/database/** | Acceso a datos SQLite |
+| **core/models/** | Entidades de datos |
+| **core/services/** | Servicios externos (IA, APIs) |
+| **features/notes/** | Feature de notas (aislado y reutilizable) |
+| **features/notes/providers/** | Estado con Riverpod |
+| **features/notes/presentation/** | UI (páginas y widgets) |
+| **utils/** | Funciones auxiliares y helpers |
 
 ### 🔄 Flujo de Datos (Riverpod)
 
