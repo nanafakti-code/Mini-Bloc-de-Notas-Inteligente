@@ -1,3 +1,4 @@
+
 # Miscellaneous
 *.class
 *.log
@@ -11,6 +12,11 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 # IntelliJ related
 *.iml
@@ -43,3 +49,4 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+

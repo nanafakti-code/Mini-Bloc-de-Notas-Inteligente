@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required permissions for internet access -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    
     <application
         android:label="mini_bloc_inteligente"
         android:name="${applicationName}"

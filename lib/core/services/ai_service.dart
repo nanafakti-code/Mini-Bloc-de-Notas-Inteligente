@@ -1,18 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AIService {
-  // IMPORTANT: Configure your API key here or use environment variables
-  static const String _apiKey = 'YOUR_API_KEY_HERE';
-
-  // Choose your AI provider: 'openai', 'gemini', or 'claude'
-  static const String _provider = 'openai';
-
-  // API endpoints
-  static const String _openaiEndpoint =
-      'https://api.openai.com/v1/chat/completions';
-  static const String _geminiEndpoint =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  // Groq API - COMPLETAMENTE GRATUITO y funcional
+  // Obtén tu API key gratis en: https://console.groq.com/
+  static const String _groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
+  
+  // Lee la API Key desde el archivo .env o variables de entorno
+  // Para desarrollo local, crea un archivo .env en la raíz del proyecto
+  // Para producción, configura GROQ_API_KEY en las variables de entorno
+  static String get _apiKey {
+    final apiKey = dotenv.env['GROQ_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception(
+        'API Key de Groq no configurada. '
+        'Por favor, crea un archivo .env con GROQ_API_KEY=tu_clave_aqui'
+      );
+    }
+    return apiKey;
+  }
 
   // Summarize text using AI
   Future<String> summarizeText(String text) async {
@@ -20,17 +27,13 @@ class AIService {
       throw Exception('El texto no puede estar vacío');
     }
 
-    if (_apiKey == 'YOUR_API_KEY_HERE') {
-      // Return mock response if API key is not configured
-      return _getMockSummary(text);
-    }
-
     try {
       final prompt =
-          'Resume el siguiente texto de forma concisa y clara:\n\n$text';
-      return await _callAI(prompt);
+          'Resume el siguiente texto de forma concisa en 2-3 párrafos, manteniendo los puntos principales:\n\n$text';
+      return await _callGroq(prompt);
     } catch (e) {
-      throw Exception('Error al resumir el texto: $e');
+      print('Error en Groq: $e');
+      rethrow;
     }
   }
 
@@ -40,106 +43,67 @@ class AIService {
       throw Exception('El texto no puede estar vacío');
     }
 
-    if (_apiKey == 'YOUR_API_KEY_HERE') {
-      // Return mock response if API key is not configured
-      return _getMockImprovement(text);
-    }
-
     try {
       final prompt =
-          'Mejora el siguiente texto corrigiendo gramática, estilo y claridad. Mantén el mismo significado:\n\n$text';
-      return await _callAI(prompt);
+          'Mejora el siguiente texto: corrige gramática, puntuación, ortografía y estilo. Mantén el significado original pero hazlo más claro y profesional. Solo devuelve el texto mejorado:\n\n$text';
+      return await _callGroq(prompt);
     } catch (e) {
-      throw Exception('Error al mejorar el texto: $e');
+      print('Error en Groq: $e');
+      rethrow;
     }
   }
 
-  // Call AI API based on provider
-  Future<String> _callAI(String prompt) async {
-    switch (_provider) {
-      case 'openai':
-        return await _callOpenAI(prompt);
-      case 'gemini':
-        return await _callGemini(prompt);
-      default:
-        throw Exception('Proveedor de IA no soportado: $_provider');
+  // Groq API call - Completamente gratis y rápido
+  Future<String> _callGroq(String prompt) async {
+    try {
+      print('Llamando a Groq API...');
+      
+      final response = await http.post(
+        Uri.parse(_groqEndpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_apiKey',
+        },
+        body: jsonEncode({
+          'model': 'llama-3.3-70b-versatile', // Modelo más nuevo de Groq
+          'messages': [
+            {
+              'role': 'user',
+              'content': prompt,
+            }
+          ],
+          'temperature': 0.7,
+          'max_tokens': 1024,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      print('Groq Response Status: ${response.statusCode}');
+      print('Groq Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data['choices'] != null && data['choices'].isNotEmpty) {
+          final content = data['choices'][0]['message']['content'];
+          if (content != null) {
+            return content.toString().trim();
+          }
+        }
+        
+        throw Exception('Respuesta vacía de Groq');
+      } else if (response.statusCode == 401) {
+        throw Exception('API key inválida. Obtén tu clave GRATIS en: https://console.groq.com/keys');
+      } else if (response.statusCode == 429) {
+        throw Exception('Has superado el límite de solicitudes. Intenta más tarde.');
+      } else if (response.statusCode == 500 || response.statusCode == 503) {
+        throw Exception('Error en el servidor de Groq. Intenta más tarde.');
+      } else {
+        throw Exception('Error ${response.statusCode}: ${response.body}');
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Error de conexión: ${e.message}. Verifica tu conexión a internet.');
+    } catch (e) {
+      throw Exception('Error: $e');
     }
   }
-
-  // OpenAI API call
-  Future<String> _callOpenAI(String prompt) async {
-    final response = await http.post(
-      Uri.parse(_openaiEndpoint),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
-      body: jsonEncode({
-        'model': 'gpt-3.5-turbo',
-        'messages': [
-          {'role': 'user', 'content': prompt},
-        ],
-        'max_tokens': 500,
-        'temperature': 0.7,
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['choices'][0]['message']['content'].trim();
-    } else {
-      throw Exception(
-        'Error de API: ${response.statusCode} - ${response.body}',
-      );
-    }
-  }
-
-  // Google Gemini API call
-  Future<String> _callGemini(String prompt) async {
-    final url = '$_geminiEndpoint?key=$_apiKey';
-
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': prompt},
-            ],
-          },
-        ],
-        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 500},
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['candidates'][0]['content']['parts'][0]['text'].trim();
-    } else {
-      throw Exception(
-        'Error de API: ${response.statusCode} - ${response.body}',
-      );
-    }
-  }
-
-  // Mock responses for testing without API key
-  String _getMockSummary(String text) {
-    return '📝 RESUMEN (Demo):\n\n'
-        'Este es un resumen simulado de tu nota. '
-        'Para obtener resúmenes reales generados por IA, configura tu API key en el archivo ai_service.dart.\n\n'
-        'Texto original: ${text.length} caracteres\n'
-        'Resumen: ${(text.length * 0.3).round()} caracteres aproximadamente';
-  }
-
-  String _getMockImprovement(String text) {
-    return '✨ TEXTO MEJORADO (Demo):\n\n'
-        '$text\n\n'
-        '---\n'
-        'Este es un texto de demostración. '
-        'Para obtener mejoras reales generadas por IA, configura tu API key en el archivo ai_service.dart.';
-  }
-
-  // Check if API is configured
-  bool get isConfigured => _apiKey != 'YOUR_API_KEY_HERE';
 }

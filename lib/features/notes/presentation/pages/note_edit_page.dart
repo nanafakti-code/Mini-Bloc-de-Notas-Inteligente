@@ -19,6 +19,7 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
   late TextEditingController _contentController;
   bool _isLoading = false;
   bool _hasChanges = false;
+  static const int _minCharactersToSummarize = 400;
 
   @override
   void initState() {
@@ -28,9 +29,15 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
       text: widget.note?.content ?? '',
     );
 
-    // Listen for changes
-    _titleController.addListener(_onTextChanged);
-    _contentController.addListener(_onTextChanged);
+    // Listen for changes - rebuild on every change to update counters
+    _titleController.addListener(() {
+      _onTextChanged();
+      setState(() {});
+    });
+    _contentController.addListener(() {
+      _onTextChanged();
+      setState(() {}); // Rebuild to update character/word counters
+    });
   }
 
   void _onTextChanged() {
@@ -102,9 +109,15 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
   }
 
   Future<void> _summarizeNote() async {
-    if (_contentController.text.trim().isEmpty) {
+    final contentLength = _contentController.text.trim().length;
+
+    if (contentLength < _minCharactersToSummarize) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay contenido para resumir')),
+        SnackBar(
+          content: Text(
+            'El texto debe tener al menos $_minCharactersToSummarize caracteres para resumir (actualmente tiene $contentLength)',
+          ),
+        ),
       );
       return;
     }
@@ -118,6 +131,13 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
       final summary = await aiService.summarizeText(_contentController.text);
 
       if (mounted) {
+        // Check if IA couldn't summarize (common phrases indicating no resumable content)
+        final cannotSummarize = summary.toLowerCase().contains('no hay texto que resumir') ||
+            summary.toLowerCase().contains('no contiene suficiente información') ||
+            summary.toLowerCase().contains('demasiado corto') ||
+            summary.toLowerCase().contains('texto proporcionado es muy corto') ||
+            summary.toLowerCase().contains('no hay contenido suficiente');
+
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -134,13 +154,14 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cerrar'),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  _contentController.text = summary;
-                  Navigator.pop(context);
-                },
-                child: const Text('Usar resumen'),
-              ),
+              if (!cannotSummarize)
+                ElevatedButton(
+                  onPressed: () {
+                    _contentController.text = summary;
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Usar resumen'),
+                ),
             ],
           ),
         );
@@ -282,7 +303,7 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
         children: [
           // AI Actions Bar
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               border: Border(
@@ -292,29 +313,71 @@ class _NoteEditPageState extends ConsumerState<NoteEditPage> {
                 ),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            child: Column(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _summarizeNote,
-                    icon: const Icon(Icons.auto_awesome, size: 18),
-                    label: const Text('Resumir'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                    ),
+                // Character and word counter
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${_contentController.text.length} caracteres',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _contentController.text.length >= _minCharactersToSummarize
+                              ? Colors.green
+                              : Colors.orange,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        '${_contentController.text.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length} palabras',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        'Mínimo: $_minCharactersToSummarize caracteres',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _improveText,
-                    icon: const Icon(Icons.auto_fix_high, size: 18),
-                    label: const Text('Mejorar'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
+                // Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading || _contentController.text.trim().length < _minCharactersToSummarize
+                            ? null
+                            : _summarizeNote,
+                        icon: const Icon(Icons.auto_awesome, size: 18),
+                        label: const Text('Resumir'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _improveText,
+                        icon: const Icon(Icons.auto_fix_high, size: 18),
+                        label: const Text('Mejorar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
